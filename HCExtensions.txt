@@ -1,0 +1,1459 @@
+info:
+  title: HandyCache Extensions API
+  version: 1.0.0
+  description: |
+    API for scripting HandyCache extensions in Lua. This document describes all available variables, functions, events, extension header structure, the `hc` and `re` tables, and usage examples.
+
+    ---
+    
+    ## Extension Header Structure
+    Each extension must start with a header in the following format:
+    ```lua
+    --[[ <HCEXTENSION>
+    @name            Extension Name
+    @author          Author Name
+    @homepage        http://homepage.com
+    @version         0.01
+    @min_HC_version  1.0.0.193
+    @description     Short description
+    @rule            <regex rule> (can be multiple)
+    @exception       <regex exception> (can be multiple)
+    @event           <EventName/HandlerFunction> (can be multiple)
+    </HCEXTENSION> ]]
+    ```
+    - **@name**: Extension name
+    - **@author**: Author name
+    - **@homepage**: Homepage URL
+    - **@version**: Extension version
+    - **@min_HC_version**: Minimum HandyCache version required
+    - **@description**: Short description
+    - **@rule**: Regex rule for URL matching (multiple allowed)
+    - **@exception**: Regex exception for URL matching (multiple allowed)
+    - **@event**: Event and handler function (multiple allowed)
+
+    ---
+    
+    ## Supported Events
+    | Event                      | Description |
+    |----------------------------|-------------|
+    | Init                       | On extension load or reload |
+    | Options                    | On extension settings button |
+    | Timer1s                    | Every second |
+    | Timer1m                    | Every minute |
+    | URLToFileNameConverting    | On URL to cache file name conversion |
+    | BeforeViewInMonitor        | Before creating a new monitor row |
+    | BeforeAuthorization        | On client request, before authorization |
+    | RequestHeaderReceived      | On receiving client request header |
+    | BeforeRequestHeaderSend    | Before sending request header to server |
+    | BeforeRequestBodySend      | On sending POST body chunk to server |
+    | AnswerHeaderReceived       | On receiving server response header |
+    | BeforeAnswerHeaderSend     | Before sending response header to client |
+    | BeforeAnswerBodySend       | On sending response body chunk to client |
+    | Destroy                    | On extension unload or HandyCache exit |
+
+    ---
+    
+    ## Table `hc` (HandyCache API)
+    The `hc` table provides all variables and functions for interacting with HandyCache. Variables include request/response data, user info, cache info, and control flags. Functions include:
+    - **shell_execute**: Run a Windows program
+    - **execute_and_wait**: Run a program and wait for exit
+    - **play_sound**: Play a sound or system event
+    - **crc32**: Calculate CRC32 hash
+    - **compress / uncompress**: Gzip compress/decompress
+    - **encode_base64 / decode_base64**: Base64 encode/decode
+    - **recode**: Convert string encoding
+    - **execute_cmd**: Execute HandyCache command (see full list in docs)
+    - **send_request**: Send HTTP request via HandyCache
+    - **sleep**: Pause execution
+    - **put_msg**: Show message box
+    - **put_to_log**: Write to log
+    - **get_keyboard_state**: Get pressed keys
+    - **systime_to_str / str_to_systime**: Time conversions
+    - **get_host_IP**: Resolve host to IP
+    - **ssl_handling_enabled**: Check SSL handling
+    - **enable_user**: Enable/disable user
+    - **get_users_stat**: Get user stats
+    - **set_user_speed**: Set user speed limit
+    - **prepare_path**: Create directories
+    - **get_dir_files_list**: List files in directory
+    - **repeat_options**: Set retry options
+    - **call_me_for**: Register event handler
+    - **client_disconnect / server_disconnect / user_disconnect**: Disconnect clients/servers/users
+    - **prepare_url / preform_cache_file_name / get_cache_file_name / get_cache_file_size / get_cache_file_age / get_cache_file_content_type / delete_cache_file / delete_file / file_last_modified_time / update_url_info / set_global**: Cache and file management
+
+    See the `paths` section for full function signatures and parameters.
+
+    ---
+    
+    ## Table `re` (Regular Expressions)
+    The `re` table provides PCRE regex functions for use in extensions:
+    - `re.find(str, pattern, flags)`
+    - `re.replace(str, pattern, replacement, flags)`
+    - `re.match(str, pattern, flags)`
+    - `re.split(str, pattern, flags)`
+    Flags are integer bitmasks, see PCRE documentation for details.
+
+    ---
+    
+    ## Variables
+    All variables available in the `hc` table are described in the `HCVariable` schema. They include:
+    - Request/response info: `url`, `method`, `request_header`, `request_body`, `answer_header`, `answer_body`, etc.
+    - Cache info: `cache_file_name`, `cache_file_size`, `cache_file_age`, etc.
+    - User info: `user_name`, `user_ip`, `user_from_internet`, etc.
+    - Control flags: `action`, `extensions_on`, `read_from_cache_on`, etc.
+    - See the `components.schemas.HCVariable` for the full list and descriptions.
+
+    ---
+    
+    ## Example Extension
+    ```lua
+    --[[ <HCExtension>
+    @name ReqBody
+    @author mai
+    @version 0.2
+    @description Example
+    @min_HC_version 1.0.0.310
+    @rule mmm\.ru/form/
+    @event BeforeRequestHeaderSend/header
+    @event BeforeRequestBodySend/body
+    </HCExtension> ]]
+    
+    function header()
+      if hc.method == 'POST' then
+        local s1= re.find(hc.request_header, [[[^\r]*\r\n]], 0)
+        local s2= re.replace(hc.request_header, [[[^\r]*\r\n]], '')
+        hc.request_header = s1
+        hc_static['req_header']= s2
+      end
+    end
+    
+    function body()
+      if not hc_static['req_body'] then hc_static['req_body']= '' end
+      hc_static['req_body']= hc_static['req_body']..hc.request_body
+      hc.request_body= ''
+      if hc.last_part then
+        -- Process request body here
+        hc.request_body= hc_static['req_header']..hc_static['req_body']
+        hc_static['req_header']= nil
+        hc_static['req_body']= nil
+      end
+    end
+    ```
+
+    ---
+    
+    ## HandyCache Command List (for `execute_cmd`)
+    - AddToWhiteList URL
+    - AddToBlackList URL
+    - AddToSaveToCacheList URL
+    - AddToDontUpdateList URL
+    - AddToOnlyFromCacheList URL
+    - ViewWindow
+    - ViewWhiteList
+    - ViewBlackList
+    - ViewSaveToCacheList
+    - ViewDontUpdateList
+    - ViewOnlyFromCacheList
+    - WhiteList on|off|switch
+    - BlackList on|off|switch
+    - SaveToCacheList on|off|switch
+    - DontUpdateList on|off|switch
+    - OnlyFromCacheList on|off|switch
+    - OffLine on|off|switch
+    - RedirectList on|off|switch
+    - FreshFiles on|off|switch
+    - ReadFromCache on|off|switch
+    - LoadURL
+    - DeleteURL
+    - StopURL
+    - ClearCache
+    - Exit
+    - URLTransformingList on|off|switch
+    - DontLoadLargeFiles on|off|switch
+    - SpeedLimit on|off|switch
+    - MediatorServers on|off|switch
+    - DNSCache on|off|switch
+    - ParentProxy on|off|switch
+    - UnconditionalProxy on|off|switch
+    - ConditionalProxy on|off|switch
+    - Statistics on|off|switch
+    - SelectCacheDirSet 1|2
+    - SetMainCacheDir1 DirPath
+    - SetMainCacheDir2 DirPath
+    - SetROCacheDir1 DirPath
+    - SetROCacheDir2 DirPath
+    - SelectParentProxy ProxyName
+    - ViewExtensionsList
+    - EnableExtension ExtName
+    - DisableExtension ExtName
+    - ReloadExtension ExtName
+
+    See the full documentation for argument details and more advanced usage.
+servers:
+  - url: http://localhost/
+paths:
+  /hc/shell_execute:
+    post:
+      summary: Execute a shell command (Windows ShellExecute)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                File:
+                  type: string
+                  description: File to open
+                Parameters:
+                  type: string
+                  description: Parameters for the application
+                Directory:
+                  type: string
+                  description: Default directory
+                ShowCmd:
+                  type: string
+                  enum: [SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNA, SW_SHOWNOACTIVATE, SW_SHOWNORMAL]
+                  description: Window state
+                Wait:
+                  type: boolean
+                  description: Wait for completion
+      responses:
+        '200':
+          description: OK or error message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+  /hc/execute_and_wait:
+    post:
+      summary: Execute a program and wait for it to finish
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Cmd:
+                  type: string
+                  description: Command line to execute
+      responses:
+        '200':
+          description: Exit code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exit_code:
+                    type: integer
+  /hc/play_sound:
+    post:
+      summary: Play a sound (wav file or system event)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Sound:
+                  type: string
+                  description: Sound file or system event name
+      responses:
+        '200':
+          description: No content
+  /hc/crc32:
+    post:
+      summary: Calculate CRC32 hash of a string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Input string
+      responses:
+        '200':
+          description: CRC32 hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  crc32:
+                    type: integer
+  /hc/compress:
+    post:
+      summary: Compress a string using gzip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Input string
+      responses:
+        '200':
+          description: Compressed string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compressed:
+                    type: string
+  /hc/uncompress:
+    post:
+      summary: Uncompress a gzip string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Compressed string
+      responses:
+        '200':
+          description: Uncompressed string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uncompressed:
+                    type: string
+  /hc/encode_base64:
+    post:
+      summary: Encode a string to base64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Input string
+      responses:
+        '200':
+          description: Encoded string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  encoded:
+                    type: string
+  /hc/decode_base64:
+    post:
+      summary: Decode a base64 string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Encoded string
+      responses:
+        '200':
+          description: Decoded string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  decoded:
+                    type: string
+  /hc/put_msg:
+    post:
+      summary: Show a message box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                time:
+                  type: integer
+                  description: Time in seconds (1-20)
+                msg:
+                  type: string
+                  description: Message text
+      responses:
+        '200':
+          description: No content
+  /hc/put_to_log:
+    post:
+      summary: Write a message to the log
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                msg:
+                  type: string
+                  description: Log message
+      responses:
+        '200':
+          description: No content
+  /hc/recode:
+    post:
+      summary: Convert string encoding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Str:
+                  type: string
+                  description: Input string
+                InCP:
+                  type: integer
+                  description: Input code page
+                OutCP:
+                  type: integer
+                  description: Output code page
+                Flags:
+                  type: integer
+                  description: Conversion flags (optional)
+                DefaultChar:
+                  type: string
+                  description: Default char for unmapped (optional)
+      responses:
+        '200':
+          description: Converted string and flag if DefaultChar was used
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                  used_default:
+                    type: boolean
+  /hc/execute_cmd:
+    post:
+      summary: Execute HandyCache command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Cmd:
+                  type: string
+                  description: Command to execute
+      responses:
+        '200':
+          description: No content
+  /hc/send_request:
+    post:
+      summary: Send HTTP request via HandyCache
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                header:
+                  type: string
+                  description: HTTP request header
+                body:
+                  type: string
+                  description: POST body (optional)
+                https_header:
+                  type: string
+                  description: HTTPS proxy header (optional)
+      responses:
+        '200':
+          description: No content
+  /hc/sleep:
+    post:
+      summary: Sleep for a given time
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                t:
+                  type: integer
+                  description: Time in milliseconds
+      responses:
+        '200':
+          description: No content
+  /hc/get_keyboard_state:
+    get:
+      summary: Get pressed keyboard keys
+      responses:
+        '200':
+          description: Pressed keys string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: string
+  /hc/systime_to_str:
+    post:
+      summary: Convert system time to string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                time:
+                  type: integer
+                  description: System time (seconds since epoch)
+                gmt:
+                  type: boolean
+                  description: Use GMT (default true)
+      responses:
+        '200':
+          description: Time as string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+  /hc/str_to_systime:
+    post:
+      summary: Convert string time to system time
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                str:
+                  type: string
+                  description: Time string
+                gmt:
+                  type: boolean
+                  description: Is GMT (default true)
+      responses:
+        '200':
+          description: System time (seconds since epoch)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: integer
+  /hc/get_host_IP:
+    post:
+      summary: Get IP address for a host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                host:
+                  type: string
+                  description: Host name
+                cache:
+                  type: boolean
+                  description: Use DNS cache (optional)
+                timeout:
+                  type: integer
+                  description: Timeout (optional)
+      responses:
+        '200':
+          description: IP address and message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip:
+                    type: string
+                  message:
+                    type: string
+  /hc/ssl_handling_enabled:
+    post:
+      summary: Check if SSL handling is enabled
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL (optional)
+                name:
+                  type: string
+                  description: User name (optional)
+      responses:
+        '200':
+          description: SSL enabled state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+  /hc/enable_user:
+    post:
+      summary: Enable or disable user access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: User name
+                enable:
+                  type: boolean
+                  description: Enable access (optional)
+      responses:
+        '200':
+          description: User access state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+  /hc/get_users_stat:
+    post:
+      summary: Get user statistics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: '#all', '#active', or user name
+      responses:
+        '200':
+          description: User statistics table
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    from_internet:
+                      type: integer
+                    from_cache:
+                      type: integer
+                    to_internet:
+                      type: integer
+                    connections_number:
+                      type: integer
+                    speed_limit:
+                      type: integer
+  /hc/set_user_speed:
+    post:
+      summary: Set user speed limit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: User name
+                speed:
+                  type: integer
+                  description: Speed limit in bytes/sec (0 = unlimited)
+      responses:
+        '200':
+          description: Speed limit or null if user not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speed:
+                    type: integer
+  /hc/prepare_path:
+    post:
+      summary: Create directories for a given path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Directory path
+      responses:
+        '200':
+          description: No content
+  /hc/get_dir_files_list:
+    post:
+      summary: Get list of files in a directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                  description: Directory path
+      responses:
+        '200':
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: string
+  /hc/repeat_options:
+    post:
+      summary: Set repeat options for server requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: 'connect', 'request', or 'no_answer'
+                time:
+                  type: integer
+                  description: Time in seconds (optional)
+                pause:
+                  type: integer
+                  description: Pause in seconds (optional)
+      responses:
+        '200':
+          description: No content
+  /hc/call_me_for:
+    post:
+      summary: Register event handler for current request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  type: string
+                  description: Event name
+                function:
+                  type: string
+                  description: Function name
+      responses:
+        '200':
+          description: No content
+  /hc/client_disconnect:
+    post:
+      summary: Disconnect client connection
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ind:
+                  type: integer
+                  description: Connection index (optional)
+      responses:
+        '200':
+          description: No content
+  /hc/server_disconnect:
+    post:
+      summary: Disconnect from server
+      responses:
+        '200':
+          description: No content
+  /hc/user_disconnect:
+    post:
+      summary: Disconnect all connections for a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: User name
+      responses:
+        '200':
+          description: No content
+  /hc/prepare_url:
+    post:
+      summary: Convert URL to cache file name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL
+                URLTransformingList:
+                  type: boolean
+                  description: Use URLTransformingList (optional)
+                DecodePunyCode:
+                  type: boolean
+                  description: Decode punycode (optional)
+                DecodeLocaleURL:
+                  type: boolean
+                  description: Decode locale URL (optional)
+      responses:
+        '200':
+          description: Cache file name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_name:
+                    type: string
+  /hc/preform_cache_file_name:
+    post:
+      summary: Set cache file name (for URLToFileNameConverting event)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: File path
+      responses:
+        '200':
+          description: No content
+  /hc/get_cache_file_name:
+    post:
+      summary: Get cache file name and existence for URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL
+      responses:
+        '200':
+          description: File name and existence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_name:
+                    type: string
+                  exists:
+                    type: boolean
+  /hc/get_cache_file_size:
+    post:
+      summary: Get cache file size
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File name
+      responses:
+        '200':
+          description: File size or -1 if not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  size:
+                    type: integer
+  /hc/get_cache_file_age:
+    post:
+      summary: Get cache file age (seconds since last modification)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File name
+      responses:
+        '200':
+          description: File age in seconds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  age:
+                    type: integer
+  /hc/get_cache_file_content_type:
+    post:
+      summary: Get cache file content type and encoding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File name
+      responses:
+        '200':
+          description: Content type and encoding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content_type:
+                    type: string
+                  encoding:
+                    type: string
+  /hc/delete_cache_file:
+    post:
+      summary: Delete cache file for URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL
+      responses:
+        '200':
+          description: No content
+  /hc/delete_file:
+    post:
+      summary: Delete file or directory (with mask support)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File or directory path (may include mask)
+      responses:
+        '200':
+          description: No content
+  /hc/file_last_modified_time:
+    post:
+      summary: Get file last modified time
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File name
+                gmt:
+                  type: boolean
+                  description: Return GMT (default false)
+      responses:
+        '200':
+          description: Last modified time (seconds since epoch)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time:
+                    type: integer
+  /hc/update_url_info:
+    post:
+      summary: Remove URL info from RAM cache and internal variables
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL
+      responses:
+        '200':
+          description: No content
+  /hc/set_global:
+    post:
+      summary: Set global variable value
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Variable name
+                value:
+                  type: string
+                  description: Value to set
+      responses:
+        '200':
+          description: No content
+  /hc/set_global_table_item:
+    post:
+      summary: Set a value in a global table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table:
+                  type: string
+                  description: Global table name
+                key:
+                  type: string
+                  description: Key in the table
+                value:
+                  type: string
+                  description: Value to set
+      responses:
+        '200':
+          description: No content
+  /hc/get_global_table_item:
+    post:
+      summary: Get a value from a global table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table:
+                  type: string
+                  description: Global table name
+                key:
+                  type: string
+                  description: Key in the table
+      responses:
+        '200':
+          description: Value from the table
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: string
+  /hc/remove_global:
+    post:
+      summary: Remove a global variable or table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Variable or table name
+      responses:
+        '200':
+          description: No content
+  /hc/exists_global:
+    post:
+      summary: Check if a global variable or table exists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Variable or table name
+      responses:
+        '200':
+          description: Existence state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+  /re/register_regex:
+    post:
+      summary: Register a regular expression for reuse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pattern:
+                  type: string
+                  description: Regex pattern
+                flags:
+                  type: integer
+                  description: PCRE flags (bitmask)
+      responses:
+        '200':
+          description: Registered regex ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  regex_id:
+                    type: integer
+  /re/registered_regex:
+    post:
+      summary: Get a registered regex pattern by ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                regex_id:
+                  type: integer
+                  description: Registered regex ID
+      responses:
+        '200':
+          description: Regex pattern and flags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pattern:
+                    type: string
+                  flags:
+                    type: integer
+components:
+  schemas:
+    HCVariable:
+      type: object
+      properties:
+        ver:
+          type: string
+          description: HandyCache version string
+        version_number:
+          type: string
+          description: HandyCache version number
+        language_id:
+          type: string
+          description: Current UI language id
+        script_name:
+          type: string
+          description: Path to current extension file
+        event:
+          type: string
+          description: Name of the current event
+        ini_path:
+          type: string
+          description: Path to settings folder
+        exe_path:
+          type: string
+          description: Path to HandyCache.exe folder
+        cache_path:
+          type: string
+          description: Path to cache folder
+        listening_port:
+          type: string
+          description: HandyCache listening port
+        client_connected:
+          type: boolean
+          description: Is client connected
+        connection_index:
+          type: integer
+          description: Connection index for current request
+        url:
+          type: string
+          description: Request URL
+        method:
+          type: string
+          description: HTTP method
+        is_https:
+          type: boolean
+          description: Is HTTPS request
+        request_ims:
+          type: integer
+          description: If-Modified-Since from request (GMT, seconds)
+        hc_ims:
+          type: integer
+          description: If-Modified-Since added by HandyCache (GMT, seconds)
+        ignore_traffic:
+          type: string
+          description: Traffic ignore mask (see docs)
+        use_proxy:
+          type: string
+          description: External HTTP proxy parameters
+        use_proxy_login:
+          type: string
+          description: Proxy login (basic auth)
+        use_bound_ip:
+          type: string
+          description: Outgoing network interface IP
+        request_header:
+          type: string
+          description: HTTP request header
+        request_body:
+          type: string
+          description: HTTP request body
+        cache_file_name:
+          type: string
+          description: Cache file name for current request
+        cache_file_size:
+          type: integer
+          description: Cache file size (bytes)
+        cache_file_age:
+          type: integer
+          description: Cache file age (seconds)
+        cache_file_content_type:
+          type: string
+          description: Cache file content type
+        cache_file_date_now:
+          type: boolean
+          description: Set cache file date to now
+        user_name:
+          type: string
+          description: User name
+        user_ip:
+          type: string
+          description: User IP address
+        user_from_internet:
+          type: integer
+          description: Data received from internet today
+        user_from_cache:
+          type: integer
+          description: Data received from cache today
+        user_to_internet:
+          type: integer
+          description: Data sent to internet today
+        answer_header:
+          type: string
+          description: HTTP answer header
+        answer_body:
+          type: string
+          description: HTTP answer body or file=.../URLToCache(...)
+        hc_static:
+          type: object
+          description: Table for storing static data between handler calls
+        last_part:
+          type: boolean
+          description: Is last part of body (for BeforeAnswerBodySend)
+        action:
+          type: string
+          description: Action for request/response (see docs)
+        extensions_on:
+          type: boolean
+          description: Enable/disable further extension handlers
+        read_from_cache_on:
+          type: boolean
+          description: Enable/disable reading from cache
+        add_ims_on:
+          type: boolean
+          description: Enable/disable Add If-Modified-Since
+        offline_disable:
+          type: boolean
+          description: Disable offline mode for request
+        ramcache_disable:
+          type: boolean
+          description: Disable RAM cache for request
+        disable_stop_ssl_decryption:
+          type: boolean
+          description: Disable auto SSL decryption stop
+        white_mask:
+          type: string
+          description: White list mask (see docs)
+        file_speed_limit:
+          type: integer
+          description: File speed limit (bytes/sec)
+        user_speed_limit:
+          type: integer
+          description: User speed limit (bytes/sec)
+        freezed_disconnection_time:
+          type: integer
+          description: Frozen connection disconnect time (seconds)
+        dont_load_large_files_on:
+          type: boolean
+          description: Is 'Do not load large files' enabled
+        speed_limit_on:
+          type: boolean
+          description: Is speed limit enabled
+        offline_on:
+          type: boolean
+          description: Is offline mode enabled
+        monitor_index:
+          type: integer
+          description: Monitor row index for current request
+        hide_in_active_list:
+          type: boolean
+          description: Hide from active requests list
+        hide_in_monitor:
+          type: boolean
+          description: Hide from monitor
+        monitor_text_color:
+          type: integer
+          description: Monitor text color (RGB)
+        monitor_parent_url:
+          type: string
+          description: Parent URL for monitor row
+        monitor_string:
+          type: string
+          description: Monitor rule column string (with #~# hint)
+        # --- Additional HandyCache variables ---
+        answer_header:
+          type: string
+          description: HTTP answer header
+        answer_body:
+          type: string
+          description: HTTP answer body or file=.../URLToCache(...)
+        hc_static:
+          type: object
+          description: Table for storing static data between handler calls
+        last_part:
+          type: boolean
+          description: Is last part of body (for BeforeAnswerBodySend)
+        action:
+          type: string
+          description: Action for request/response (see docs)
+        extensions_on:
+          type: boolean
+          description: Enable/disable further extension handlers
+        read_from_cache_on:
+          type: boolean
+          description: Enable/disable reading from cache
+        add_ims_on:
+          type: boolean
+          description: Enable/disable Add If-Modified-Since
+        offline_disable:
+          type: boolean
+          description: Disable offline mode for request
+        ramcache_disable:
+          type: boolean
+          description: Disable RAM cache for request
+        disable_stop_ssl_decryption:
+          type: boolean
+          description: Disable auto SSL decryption stop
+        white_mask:
+          type: string
+          description: White list mask (see docs)
+        file_speed_limit:
+          type: integer
+          description: File speed limit (bytes/sec)
+        user_speed_limit:
+          type: integer
+          description: User speed limit (bytes/sec)
+        freezed_disconnection_time:
+          type: integer
+          description: Frozen connection disconnect time (seconds)
+        dont_load_large_files_on:
+          type: boolean
+          description: Is 'Do not load large files' enabled
+        speed_limit_on:
+          type: boolean
+          description: Is speed limit enabled
+        offline_on:
+          type: boolean
+          description: Is offline mode enabled
+        monitor_index:
+          type: integer
+          description: Monitor row index for current request
+        hide_in_active_list:
+          type: boolean
+          description: Hide from active requests list
+        hide_in_monitor:
+          type: boolean
+          description: Hide from monitor
+        monitor_text_color:
+          type: integer
+          description: Monitor text color (RGB)
+        monitor_parent_url:
+          type: string
+          description: Parent URL for monitor row
+        monitor_string:
+          type: string
+          description: Monitor rule column string (with #~# hint)
+        # --- End of HandyCache variables ---
